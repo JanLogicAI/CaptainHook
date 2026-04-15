@@ -21,6 +21,7 @@ PREFIX_TO_REPO = {
     "vep": "vep",
     "crm": "crm",
     "3dp": "3-d-print",
+    "log": "virtual-developer",
 }
 
 DUTCH_TO_ENGLISH = {
@@ -196,18 +197,46 @@ class CodebaseAnalyzer:
                     print(f"    🎯 Prefix '{prefix}' partial match: {repo['name']}")
                     return {"url": repo["url"], "name": repo["name"]}
 
-        # Keyword matching fallback
+        # Keyword matching fallback with improved scoring
+        GENERIC_TERMS = {"agent", "api", "web", "app", "service", "tool", "data", "test", "dev", "lib", "core", "base"}
+        ticket_context = f"{keywords}".lower()
+        
         best_score = 0
         best_repo = None
         for repo in repos:
             score = 0
             repo_name = repo.get("name", "").lower()
             repo_desc = (repo.get("description") or "").lower()
+            repo_lang = (repo.get("primaryLanguage") or {}).get("name", "").lower() if isinstance(repo.get("primaryLanguage"), dict) else ""
+            
+            # Split repo name into parts for better matching
+            repo_parts = repo_name.replace("_", "-").split("-")
+            part_matches = 0
+            
             for kw in keywords:
-                if kw in repo_name:
-                    score += 3
-                if kw in repo_desc:
+                kw_lower = kw.lower()
+                # Match against individual repo name parts
+                for part in repo_parts:
+                    if kw_lower == part:
+                        score += 5
+                        part_matches += 1
+                    elif len(kw_lower) > 3 and (kw_lower in part or part in kw_lower):
+                        score += 2
+                        part_matches += 1
+                # Description matching
+                if repo_desc and kw_lower in repo_desc:
                     score += 1
+                # Bonus for longer keywords
+                if len(kw_lower) > 5:
+                    score += 1
+                # Penalize generic terms
+                if kw_lower in GENERIC_TERMS:
+                    score -= 2
+            
+            # Bonus for multiple part matches
+            if part_matches >= 2:
+                score += part_matches * 2
+            
             if score > best_score:
                 best_score = score
                 best_repo = repo
