@@ -26,7 +26,7 @@ A Python-based agent that automatically polls your Jira board for assigned ticke
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/logicai-oss/jira-agent.git
+git clone https://github.com/JanLogicAI/jira-agent.git
 cd jira-agent
 ```
 
@@ -408,4 +408,4 @@ Contributions are welcome! Feel free to:
 
 ---
 
-*Built with ☕ and 🤖 by [LogicAI](https://github.com/logicai-oss)*
+*Built with ☕ and 🤖 by [JanLogicAI](https://github.com/JanLogicAI)*
