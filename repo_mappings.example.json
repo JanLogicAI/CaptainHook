@@ -1,0 +1,5 @@
+{
+    "TICKET_PREFIX": "/path/to/your/repo",
+    "RVZ": "/home/user/projects/rvz",
+    "VAPDE": "/home/user/projects/verisure"
+}
