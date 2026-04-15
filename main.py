@@ -101,28 +101,21 @@ class JiraAgent:
 
     def generate_and_save_plan(self, ticket: dict, clarifications: dict = None):
         """Generate plan with codebase analysis, save to file, post to Jira and Discord."""
+        from codebase_analyzer import CodebaseAnalyzer
+
         ticket_key = ticket.get("key")
 
-        # Try codebase-aware analysis first
-        from codebase_analyzer import CodebaseAnalyzer
         analyzer = CodebaseAnalyzer()
-        repo_path = analyzer.get_repo_path(ticket_key)
-        
-        plan = None
-        if repo_path:
-            print(f"    🔬 Attempting codebase-aware analysis ({repo_path})...")
-            codebase_plan = analyzer.analyze_ticket(ticket)
-            if codebase_plan:
-                print(f"    🧠 Using codebase-aware plan")
-                plan = codebase_plan
-            else:
-                print(f"    ⚠️ Codebase analysis failed, falling back to generic plan")
+        plan = analyzer.analyze_ticket(ticket)
 
-        # Fall back to generic plan
         if plan is None:
-            print(f"    📝 Using generic plan generation")
-            plan = self.planner.generate_plan(ticket, clarifications)
-        
+            plan = (
+                f"⚠️ Could not generate a codebase-aware plan for {ticket_key}. "
+                f"The agent searched GitHub but could not find a matching repository "
+                f"or the analysis timed out. Please create a plan manually."
+            )
+            print(f"    ⚠️ Using error message (no plan generated)")
+
         plan_path = self.planner.save_plan(ticket_key, plan)
         print(f"    📄 Plan saved to: {plan_path}")
 
