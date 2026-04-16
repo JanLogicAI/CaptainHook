@@ -153,7 +153,7 @@ With the full bot setup, the agent will:
 For project-specific implementation plans that reference actual code:
 
 1. Install [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)
-2. Set `CLAUDE_CLI_PATH` in your `.env` (defaults to `~/.local/bin/claude`)
+2. Set `CLAUDE_CLI_PATH` in your `.env` to the absolute path of the `claude` binary (e.g. `~/.local/bin/claude` — `~` is expanded). If left blank, the agent falls back to looking for `claude` on your `PATH`; if neither is available, codebase-aware analysis is skipped.
 3. Create a `repo_mappings.json` file mapping Jira project prefixes to local repo paths:
 
 ```bash
@@ -278,7 +278,7 @@ When repo mappings are configured and Claude Code is installed:
 
 ### macOS (launchd)
 
-Create `~/Library/LaunchAgents/com.jiraagent.plist`:
+Create `~/Library/LaunchAgents/com.jiraagent.plist`. Substitute `/path/to/jira-agent` with the absolute path to this checkout (e.g. `/Users/<you>/Developer/jira-agent`):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -376,12 +376,18 @@ That's it. Just two dependencies.
 
 | Issue | Solution |
 |-------|----------|
-| "Missing required environment variables" | Make sure `.env` exists with `JIRA_EMAIL` and `JIRA_API_TOKEN` |
-| "Could not get account ID" | Verify your email and API token are correct |
+| "Configuration error: JIRA_BASE_URL is not set / is still the placeholder value" | Set `JIRA_BASE_URL` in `.env` to your real Jira host (e.g. `https://acme.atlassian.net`). The example placeholder is rejected on purpose. |
+| "Missing required environment variables" | Make sure `.env` exists with `JIRA_EMAIL`, `JIRA_API_TOKEN`, and `JIRA_BASE_URL` |
+| "Jira rejected credentials (401/403)" | The startup self-check couldn't authenticate — regenerate the API token at <https://id.atlassian.com/manage-profile/security/api-tokens> and verify `JIRA_EMAIL` matches the token owner. After 3 consecutive auth failures in the poll loop the agent exits instead of looping silently. |
+| "Jira returned 404 for /rest/api/3/myself" | `JIRA_BASE_URL` is pointing at the wrong host. |
 | "Failed to send Discord message" | Check webhook URL and bot permissions |
 | "Request to Jira timed out" | Network issue; agent will retry next cycle |
-| Codebase analysis not working | Install Claude Code CLI and configure `repo_mappings.json` |
+| Codebase analysis not working | Install Claude Code CLI, set `CLAUDE_CLI_PATH` in `.env` (or ensure `claude` is on `PATH`), and configure `repo_mappings.json` |
 | `rg` not found | Install [ripgrep](https://github.com/BurntSushi/ripgrep) or accept slower `grep` fallback |
+
+### Startup self-check
+
+On launch the agent calls `GET /rest/api/3/myself` once before entering the polling loop. If this fails (bad URL, bad credentials, network), the agent prints an explicit reason and exits with code `2` — it will **not** start polling with broken auth. Token values are never printed, only masked error messages.
 
 ## 🗺️ Roadmap
 

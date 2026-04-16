@@ -2,12 +2,16 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from typing import Dict, List, Optional
 
+from config import Config
+
 GH_CLI = "/opt/homebrew/bin/gh"
-CLAUDE_CLI = "/Users/logicai/.local/bin/claude"
+# Resolve the Claude CLI path: honor explicit config first, then PATH lookup.
+CLAUDE_CLI = Config.CLAUDE_CLI_PATH or shutil.which("claude") or ""
 REPO_CACHE_DIR = "/tmp/jira-agent-repos"
 CACHE_FILE = os.path.join(REPO_CACHE_DIR, "gh_cache.json")
 CACHE_TTL = 3600  # 1 hour
@@ -413,6 +417,10 @@ Search the codebase for relevant code and create a detailed plan with:
 
 Be specific. Do NOT give generic advice."""
             timeout = 180
+
+        if not CLAUDE_CLI:
+            print("    ⚠️ CLAUDE_CLI_PATH not set and `claude` not on PATH — skipping Claude analysis")
+            return None
 
         print(f"    🤖 Asking Claude to analyze...")
         try:

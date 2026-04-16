@@ -2,8 +2,12 @@
 import base64
 import re
 import requests
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from config import Config
+
+
+class JiraAuthError(Exception):
+    """Raised when Jira rejects the credentials (401/403)."""
 
 
 class JiraClient:
@@ -39,8 +43,15 @@ class JiraClient:
                 params=data if method == "GET" else None,
                 timeout=30
             )
+            if response.status_code in (401, 403):
+                raise JiraAuthError(
+                    f"Jira rejected credentials ({response.status_code}) for {endpoint} "
+                    f"— verify JIRA_EMAIL and JIRA_API_TOKEN"
+                )
             response.raise_for_status()
             return response.json()
+        except JiraAuthError:
+            raise
         except requests.exceptions.Timeout:
             print(f"⏱️ Request to {endpoint} timed out")
             return None
@@ -50,6 +61,41 @@ class JiraClient:
         except requests.exceptions.RequestException as e:
             print(f"❌ Request failed for {endpoint}: {e}")
             return None
+
+    def test_auth(self) -> Tuple[bool, str]:
+        """Verify credentials by calling /myself. Returns (ok, message)."""
+        url = f"{self.base_url}/rest/api/3/myself"
+        headers = {**self.headers, "Authorization": self.auth}
+        try:
+            response = requests.get(url, headers=headers, timeout=15)
+        except requests.exceptions.Timeout:
+            return False, f"Timed out connecting to {self.base_url}"
+        except requests.exceptions.ConnectionError as e:
+            return False, f"Could not connect to {self.base_url}: {e}"
+        except requests.exceptions.RequestException as e:
+            return False, f"Request to {self.base_url} failed: {e}"
+
+        if response.status_code in (401, 403):
+            return False, (
+                f"Jira rejected credentials ({response.status_code}). "
+                f"Check JIRA_EMAIL and JIRA_API_TOKEN — the token may be revoked or "
+                f"belong to a different account."
+            )
+        if response.status_code == 404:
+            return False, (
+                f"Jira returned 404 for /rest/api/3/myself at {self.base_url} — "
+                f"JIRA_BASE_URL likely points at the wrong host."
+            )
+        if response.status_code >= 400:
+            return False, f"Unexpected HTTP {response.status_code} from Jira: {response.text[:200]}"
+
+        try:
+            body = response.json()
+        except ValueError:
+            return False, "Jira response was not JSON — base URL may be wrong"
+
+        display = body.get("displayName") or body.get("emailAddress") or body.get("accountId", "unknown")
+        return True, f"Authenticated as {display}"
 
     def get_assigned_tickets(self) -> List[Dict[str, Any]]:
         """Fetch all tickets assigned to current user."""
@@ -125,9 +171,16 @@ class JiraClient:
 
         try:
             response = requests.post(url, json=data, headers=headers, timeout=30)
+            if response.status_code in (401, 403):
+                raise JiraAuthError(
+                    f"Jira rejected credentials ({response.status_code}) while "
+                    f"commenting on {issue_key}"
+                )
             response.raise_for_status()
             print(f"    💬 Posted plan as comment on {issue_key}")
             return True
+        except JiraAuthError:
+            raise
         except requests.exceptions.RequestException as e:
             print(f"❌ Failed to add comment to {issue_key}: {e}")
             return False
